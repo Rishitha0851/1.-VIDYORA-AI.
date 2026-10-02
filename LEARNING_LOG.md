@@ -33,3 +33,39 @@ A concise record of core architectural concepts and mechanisms learned throughou
 3. **Validation**: `response.ok` checks whether HTTP status is in the 200–299 range.
 4. **Parsing**: `response.json()` parses the JSON body into a TypeScript-typed object.
 5. **Re-render**: `setStatus('success')` and `setData(result)` update React state, prompting an automatic and safe UI re-render.
+
+---
+
+## Step 7: Video Analysis API — Submission & Processing Lifecycle
+
+### 1. HTTP POST Method
+- Unlike `GET` (which retrieves data without side effects), `POST` transmits payload data in the HTTP request body (`application/json`) to create or process server-side resources.
+- `POST /api/videos/process` receives the client's URL payload securely in the request body rather than exposing it as URL query parameters.
+
+### 2. Pydantic Validation & Data Integrity
+- FastAPI leverages Pydantic models (`BaseModel`) for strict schema declaration, runtime type casting, and validation.
+- `@field_validator` validates the URL scheme (HTTP/HTTPS) and structure before route handler execution, returning structured HTTP `422 Unprocessable Entity` responses automatically if invalid.
+
+### 3. API Request and Response Models
+- **Request Model (`VideoProcessRequest`)**: Defines the contract for incoming JSON payloads (`{ "url": string }`).
+- **Response Model (`VideoProcessResponse`)**: Guarantees the output structure (`{ "status", "message", "video_url", "received_at", "video_id" }`), strips unexposed internal data, and auto-generates accurate OpenAPI/Swagger documentation.
+
+### 4. Async / Await Lifecycle
+- In React, asynchronous operations (`await fetch(...)`, `await response.json()`) allow network requests to resolve in the background without freezing the UI or browser thread.
+- React components update UI state sequentially: `isSubmitting: true` $\rightarrow$ network await $\rightarrow$ `processedVideo: data` $\rightarrow$ `isSubmitting: false`.
+
+### 5. Frontend-to-Backend Data Flow (POST)
+1. **User Action**: User enters URL in `VideoInput` and submits the form.
+2. **Client Validation**: Quick syntax/empty checks occur instantly in the browser.
+3. **HTTP Dispatch**: `fetch('http://127.0.0.1:8000/api/videos/process', { method: 'POST', body: JSON.stringify({ url }) })`.
+4. **Backend Processing**: FastAPI parses JSON body into `VideoProcessRequest`, validates URL, extracts `video_id`, and returns `VideoProcessResponse`.
+5. **Client Response**: React receives JSON payload, clears loading spinner, and renders the success card with video details and timestamp.
+
+### 6. Error Handling Strategy (Defense-in-Depth)
+- **Client-Side**: Instant feedback for empty strings or invalid URL formats before sending network packets.
+- **Server-Side**: Authoritative validation via Pydantic; catches malformed payloads or invalid protocols with descriptive 422 errors.
+- **Network / Transport**: `try...catch` in React catches server downtime or offline states and displays user-friendly recovery instructions.
+
+### 7. Interactive API Testing via Swagger UI (`/docs`)
+- FastAPI auto-generates interactive OpenAPI documentation at `http://127.0.0.1:8000/docs`.
+- Enables developers to test endpoints, inspect schemas, and verify response payloads directly in the browser without writing manual test scripts.

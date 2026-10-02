@@ -2,50 +2,63 @@ import { useState, type FormEvent } from 'react'
 
 interface VideoInputProps {
   /** Callback fired when a valid URL is submitted */
-  onSubmit: (url: string) => void
+  onSubmit: (url: string) => Promise<void> | void
   /** Optional loading state to disable input during processing */
   isLoading?: boolean
+  /** External server/API error message to display */
+  serverError?: string | null
+  /** Optional callback to clear server error when typing */
+  onClearError?: () => void
 }
 
-export default function VideoInput({ onSubmit, isLoading = false }: VideoInputProps) {
+export default function VideoInput({
+  onSubmit,
+  isLoading = false,
+  serverError = null,
+  onClearError,
+}: VideoInputProps) {
   // 1. Local state for what the user is typing
   const [url, setUrl] = useState<string>('')
 
-  // 2. Local state for validation error messages
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // 2. Local state for client-side validation error messages
+  const [clientError, setClientError] = useState<string | null>(null)
 
-  // 3. Simple URL validation function
+  // 3. Simple client-side URL validation function
   const validateUrl = (value: string): boolean => {
     if (!value.trim()) {
-      setErrorMessage('Please enter a video URL to begin.')
+      setClientError('Please enter a video URL to begin.')
       return false
     }
 
     try {
       const parsed = new URL(value.trim())
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        setErrorMessage('URL must begin with http:// or https://')
+        setClientError('URL must begin with http:// or https://')
         return false
       }
       return true
     } catch {
-      setErrorMessage('Please enter a valid URL (e.g., https://www.youtube.com/watch?v=...)')
+      setClientError('Please enter a valid URL (e.g., https://www.youtube.com/watch?v=...)')
       return false
     }
   }
 
   // 4. Form submit handler
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     // Prevent the default browser behavior (which would reload the page)
     e.preventDefault()
 
     const trimmedUrl = url.trim()
 
     if (validateUrl(trimmedUrl)) {
-      setErrorMessage(null)
-      onSubmit(trimmedUrl)
+      setClientError(null)
+      if (onClearError) onClearError()
+      await onSubmit(trimmedUrl)
     }
   }
+
+  // Effective error to show (client validation error has immediate precedence, then server error)
+  const activeError = clientError || serverError
 
   return (
     <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -63,8 +76,9 @@ export default function VideoInput({ onSubmit, isLoading = false }: VideoInputPr
             value={url}
             onChange={(e) => {
               setUrl(e.target.value)
-              // Clear error as soon as user types
-              if (errorMessage) setErrorMessage(null)
+              // Clear errors as soon as user types
+              if (clientError) setClientError(null)
+              if (serverError && onClearError) onClearError()
             }}
             placeholder="https://www.youtube.com/watch?v=..."
             disabled={isLoading}
@@ -74,17 +88,20 @@ export default function VideoInput({ onSubmit, isLoading = false }: VideoInputPr
           <button
             type="submit"
             disabled={isLoading}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-medium text-sm rounded-xl transition shadow-md shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-medium text-sm rounded-xl transition shadow-md shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap flex items-center justify-center gap-2"
           >
-            {isLoading ? 'Processing...' : 'Analyze Video'}
+            {isLoading && (
+              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            )}
+            {isLoading ? 'Submitting...' : 'Analyze Video'}
           </button>
         </div>
 
-        {/* Validation Error Message */}
-        {errorMessage && (
+        {/* Validation / Server Error Message */}
+        {activeError && (
           <p className="text-xs text-rose-400 flex items-center gap-1.5 animate-fadeIn">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
-            {errorMessage}
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>
+            <span>{activeError}</span>
           </p>
         )}
       </form>
