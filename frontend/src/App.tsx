@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import WelcomeBanner from './components/WelcomeBanner'
+import BackendStatus from './components/BackendStatus'
 import VideoInput from './components/VideoInput'
 
 export default function App() {
@@ -11,6 +12,9 @@ export default function App() {
       <main className="w-full flex flex-col items-center justify-center space-y-6">
         {/* Step 3 Component: Welcome Banner */}
         <WelcomeBanner title="VIDYORA AI: Learn Smarter" />
+
+        {/* Phase 3 Component: Backend Connection Status */}
+        <BackendStatus />
 
         {/* Step 4 Component: Video Input Form */}
         <VideoInput
