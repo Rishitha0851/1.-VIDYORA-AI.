@@ -1,9 +1,17 @@
+import hashlib
 import re
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+
+from models import (
+    VideoMetadata,
+    VideoPlatform,
+    VideoProcessingStatus,
+    VideoProcessRequest,
+    VideoProcessResponse,
+)
 
 # 1. Initialize the FastAPI application instance
 app = FastAPI(
@@ -13,8 +21,6 @@ app = FastAPI(
 )
 
 # 2. Configure CORS (Cross-Origin Resource Sharing)
-# The React development server runs at http://localhost:5173 or http://127.0.0.1:5173.
-# We explicitly whitelist our local frontend origins.
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -30,48 +36,11 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Pydantic Schemas / Request & Response Models
+# Helper Functions: Platform Detection and Identifier Resolution
 # ---------------------------------------------------------------------------
 
-class VideoProcessRequest(BaseModel):
-    """Request payload for submitting an educational video URL."""
-    url: str
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("Video URL cannot be empty.")
-
-        # Validate URL scheme and structure (http:// or https://)
-        url_pattern = re.compile(
-            r'^(https?:\/\/)'                     # http:// or https://
-            r'([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}'     # domain name
-            r'(:\d+)?(\/.*)?$',                    # optional port and path
-            re.IGNORECASE
-        )
-        if not url_pattern.match(trimmed):
-            raise ValueError("Please provide a valid HTTP or HTTPS URL (e.g., https://www.youtube.com/watch?v=...).")
-
-        return trimmed
-
-
-class VideoProcessResponse(BaseModel):
-    """Structured response confirming receipt and validation of the video URL."""
-    status: str
-    message: str
-    video_url: str
-    received_at: str
-    video_id: Optional[str] = None
-
-
-# ---------------------------------------------------------------------------
-# Helper Functions
-# ---------------------------------------------------------------------------
-
-def extract_video_id(url: str) -> Optional[str]:
-    """Extract YouTube video ID if present in the URL."""
+def extract_youtube_id(url: str) -> Optional[str]:
+    """Extract YouTube 11-character video ID if present in the URL."""
     patterns = [
         r"(?:v=|\/embed\/|\/watch\?v=|\/shorts\/|^youtu\.be\/|youtu\.be\/)([a-zA-Z0-9_-]{11})",
         r"(?:v%3D)([a-zA-Z0-9_-]{11})",
@@ -81,6 +50,26 @@ def extract_video_id(url: str) -> Optional[str]:
         if match:
             return match.group(1)
     return None
+
+
+def detect_platform(url: str) -> tuple[VideoPlatform, str]:
+    """
+    Detect video platform from URL and generate/extract a unique identifier.
+    Returns a tuple of (VideoPlatform, video_id).
+    """
+    # 1. Check for YouTube
+    youtube_id = extract_youtube_id(url)
+    if youtube_id:
+        return VideoPlatform.YOUTUBE, youtube_id
+
+    # 2. Check for Direct Video Stream / File extensions
+    if re.search(r'\.(mp4|webm|mkv|mov|avi)(\?.*)?$', url, re.IGNORECASE):
+        file_hash = hashlib.sha256(url.encode('utf-8')).hexdigest()[:12]
+        return VideoPlatform.DIRECT, f"vid_{file_hash}"
+
+    # 3. Fallback for generic educational web sources
+    web_hash = hashlib.sha256(url.encode('utf-8')).hexdigest()[:12]
+    return VideoPlatform.UNKNOWN, f"src_{web_hash}"
 
 
 # ---------------------------------------------------------------------------
@@ -116,20 +105,30 @@ def health_check():
     status_code=status.HTTP_200_OK,
     summary="Submit video URL for processing",
     tags=["Videos"],
-    description="Validates and registers an educational video URL for downstream transcript extraction and AI analysis.",
+    description="Validates URL, constructs video metadata, and transitions status to ACCEPTED for future transcript extraction.",
 )
 def process_video(request: VideoProcessRequest):
     """
-    Endpoint to receive and validate educational video URLs.
-    Validates input format and returns structured receipt acknowledgement.
-    (Transcript extraction and AI processing will be executed in subsequent phases).
+    Endpoint to receive, validate, and initialize metadata for educational videos.
+    Assigns the initial lifecycle state of ACCEPTED.
     """
-    video_id = extract_video_id(request.url)
+    platform, video_id = detect_platform(request.url)
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Instantiate the structured VideoMetadata model
+    metadata = VideoMetadata(
+        id=video_id,
+        url=request.url,
+        platform=platform,
+        title=None,  # Reserved for metadata/oEmbed title extraction in future milestone
+        status=VideoProcessingStatus.ACCEPTED,
+        created_at=now,
+        updated_at=now,
+        error_message=None,
+    )
 
     return VideoProcessResponse(
-        status="received",
-        message="Video URL successfully received and queued for transcript extraction.",
-        video_url=request.url,
-        video_id=video_id,
-        received_at=datetime.now(timezone.utc).isoformat(),
+        status=VideoProcessingStatus.ACCEPTED,
+        message="Video URL validated and registered. Metadata initialized in ACCEPTED state.",
+        video=metadata,
     )

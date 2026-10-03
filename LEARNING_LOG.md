@@ -69,3 +69,52 @@ A concise record of core architectural concepts and mechanisms learned throughou
 ### 7. Interactive API Testing via Swagger UI (`/docs`)
 - FastAPI auto-generates interactive OpenAPI documentation at `http://127.0.0.1:8000/docs`.
 - Enables developers to test endpoints, inspect schemas, and verify response payloads directly in the browser without writing manual test scripts.
+
+---
+
+## Step 8: Video Metadata and Processing Foundation
+
+### 1. Video Metadata
+- **Definition**: Data about data. In VIDYORA AI, video metadata encapsulates identity, source, origin platform, status, and lifecycle timestamps for educational video resources.
+- **Why it matters**: Before audio transcription or AI generation can begin, the system must establish an unambiguous entity contract representing the video.
+
+### 2. Data Modeling & Separation of Concerns
+- **Domain Decoupling**: Extracted data models out of route handler scripts (`main.py`) into a dedicated module (`models.py`). This keeps route definitions focused exclusively on HTTP transport logic, status codes, and error serialization.
+- **Enums for Type Safety**:
+  - `VideoPlatform`: Distinguishes `youtube`, `direct` (e.g. `.mp4`, `.webm`), and `unknown` educational sources.
+  - `VideoProcessingStatus`: Constrains lifecycle values to verified string enumerations, preventing silent bugs caused by typos or ad-hoc strings.
+- **Structured Models vs. Scattered Variables**: Grouping related video attributes into a unified `VideoMetadata` model guarantees consistent data shapes, automatic type conversion, and self-documenting API schemas.
+
+### 3. Processing Lifecycle & State Machine
+- **Lifecycle States**:
+  - `SUBMITTED`: Initial URL intake from client.
+  - `VALIDATING`: Syntactic, scheme, and accessibility checks actively executing.
+  - `ACCEPTED`: Video URL validated, platform identified, and entity registered; queued for downstream processing.
+  - `PROCESSING`: Downstream transcript extraction or AI analysis actively executing.
+  - `COMPLETED`: Transcripts, structured study notes, and assessments successfully generated.
+  - `FAILED`: Validation or processing error encountered.
+- **Valid State Transitions**:
+  ```text
+  SUBMITTED ──> VALIDATING ──> ACCEPTED ──> PROCESSING ──> COMPLETED
+                     │               │            │
+                     └───> FAILED <──┴────────────┘
+  ```
+- **Truthful Status Reporting**: Because Step 8 implements metadata registration without background workers or LLM summarization yet, the endpoint truthfully reports `status = "accepted"`. It never claims "processing" or "completed" prematurely.
+
+### 4. API Response Consistency & Backwards Compatibility
+- **Consistent Envelope Pattern**: Standardized API response format (`{ status, message, video: VideoMetadata }`), allowing frontend clients to safely inspect entity metadata.
+- **Computed Fields (`@computed_field`)**: Added backward-compatible properties (`video_url`, `video_id`, `received_at`) to `VideoProcessResponse` in Pydantic v2. This ensures legacy clients continue working seamlessly while newer clients leverage the nested metadata structure.
+
+### 5. Architectural Decisions & Deferrals
+- **No Premature Database**: State is kept in-memory/returned directly to the caller during these foundational phases. Persisting to a database before the schema stabilizes causes unnecessary migration overhead.
+- **No Fake Processing Progress**: Simulating false progress bars or fake background delays creates deceptive behavior and fragile tests; progress states must reflect real server-side pipeline tasks.
+- **Deterministic ID Generation**: YouTube URLs preserve their native 11-character identifiers (`v=...`, `youtu.be/...`). Direct video streams and generic links receive deterministic SHA-256 content hashes, avoiding collisions.
+
+### 6. Future Database Considerations
+- When persisting videos in later steps (e.g., PostgreSQL / SQLite), `VideoMetadata` maps directly to a relational table:
+  - `id`: Primary key (`VARCHAR(64)`).
+  - `url`: Indexed unique or non-unique source URL (`TEXT`).
+  - `platform`: Enum column (`VARCHAR(20)`).
+  - `status`: Enum column (`VARCHAR(20)`).
+  - `created_at` / `updated_at`: `TIMESTAMP WITH TIME ZONE`.
+  - `error_message`: Nullable text for post-mortem debugging.
