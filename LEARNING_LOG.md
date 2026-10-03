@@ -118,3 +118,45 @@ A concise record of core architectural concepts and mechanisms learned throughou
   - `status`: Enum column (`VARCHAR(20)`).
   - `created_at` / `updated_at`: `TIMESTAMP WITH TIME ZONE`.
   - `error_message`: Nullable text for post-mortem debugging.
+
+---
+
+## Step 9: Transcript Extraction Foundation
+
+### 1. The Anatomy of Video Transcripts
+- **What is a Transcript?**: Spoken dialogue and lecture content translated into text synchronized with time.
+- **Caption Tracks in YouTube**:
+  - **Manual Captions**: Uploaded by creators or educators, typically punctuation-accurate and terminology-precise.
+  - **Automatic Speech Recognition (ASR)**: Machine-generated captions provided by YouTube's speech models. Often lacks punctuation or proper casing but captures spoken words accurately.
+- **Timed Text Streams**: YouTube delivers captions via specialized formats such as `json3` or `vtt`, containing individual events with `tStartMs` (start timestamp in milliseconds) and `dDurationMs` (duration in milliseconds).
+
+### 2. Why Segment-Level Timestamps Matter for Educational AI
+- **Source Grounding & Anti-Hallucination**: LLMs can summarize concepts, but hallucinations remain a risk in education. By preserving time-indexed segments (`start`, `duration`), VIDYORA AI can cite exact lecture timestamps in answers:
+  > *"Backpropagation is explained at [04:12](https://youtu.be/...&t=252s)."*
+- **Interactive Player Seeking**: Clicking a study note, glossary item, or quiz question in the frontend can command the embedded video player to jump directly to the exact second where the concept was taught.
+- **Semantic Chunking**: Instead of arbitrarily splitting text at character counts, later AI embedding pipelines can group full sentences by timestamp boundaries (e.g., 2-to-3 minute conceptual sections).
+
+### 3. Architecture: Service Layer Pattern
+- **Decoupling Business Logic from Web Transports**:
+  - Scraping, parsing, and external API requests must never pollute route handlers in `main.py`.
+  - Created `backend/services/transcript_service.py` to isolate external YouTube retrieval, error translation, and data structuring.
+  - Route handlers remain thin: they validate input, invoke the service, and serialize standard response envelopes.
+- **Resilient Mobile Client Emulation**:
+  - Modern YouTube endpoints often enforce aggressive bot-blocking (HTTP 429) against desktop automated scripts.
+  - By using `yt-dlp` configured with mobile player clients (`android`, `ios`), the backend accesses official caption tracks reliably without requiring user cookies or API keys.
+
+### 4. Domain Data Modeling
+- **`TranscriptSegment`**: Atom of spoken content (`text`, `start`, `duration`).
+- **`VideoTranscript`**: Entity holding continuous `full_text`, ordered `segments`, `language`, `is_generated` flag, and `segment_count`.
+- **`VideoMetadata` Integration**: Nested within the video metadata contract, populating real video title and transcript data when extraction succeeds.
+
+### 5. Truthful State Machine Transitions
+- If captions are found and parsed:
+  - `status`: Transitions from `ACCEPTED` to `COMPLETED`.
+  - `video.title`: Populated with real video title from YouTube.
+  - `video.transcript`: Attached to the metadata response.
+- If captions are disabled, absent, or video is private:
+  - `status`: Transitions to `FAILED`.
+  - `video.error_message`: Explains the exact reason (`"No transcript or captions available for this video."` or `"This video is unavailable, private, or does not exist."`).
+  - Server returns HTTP 200 with structured failure status rather than unhandled 500 crashes.
+

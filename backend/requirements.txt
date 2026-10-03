@@ -1,3 +1,5 @@
 # VIDYORA AI - Backend Core Dependencies
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+youtube-transcript-api>=0.6.3
+yt-dlp>=2024.0.0

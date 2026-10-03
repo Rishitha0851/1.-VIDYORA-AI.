@@ -6,12 +6,15 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
+    TranscriptSegment,
     VideoMetadata,
     VideoPlatform,
     VideoProcessingStatus,
     VideoProcessRequest,
     VideoProcessResponse,
+    VideoTranscript,
 )
+from services.transcript_service import extract_youtube_transcript
 
 # 1. Initialize the FastAPI application instance
 app = FastAPI(
@@ -105,30 +108,73 @@ def health_check():
     status_code=status.HTTP_200_OK,
     summary="Submit video URL for processing",
     tags=["Videos"],
-    description="Validates URL, constructs video metadata, and transitions status to ACCEPTED for future transcript extraction.",
+    description="Validates URL, constructs video metadata, and executes transcript extraction for YouTube educational videos.",
 )
 def process_video(request: VideoProcessRequest):
     """
-    Endpoint to receive, validate, and initialize metadata for educational videos.
-    Assigns the initial lifecycle state of ACCEPTED.
+    Endpoint to receive, validate, and process educational videos.
+    Extracts time-aligned spoken transcripts for YouTube videos, assigning
+    COMPLETED or FAILED lifecycle states based on caption availability.
     """
     platform, video_id = detect_platform(request.url)
     now = datetime.now(timezone.utc).isoformat()
 
-    # Instantiate the structured VideoMetadata model
+    # If YouTube, execute transcript extraction pipeline
+    if platform == VideoPlatform.YOUTUBE:
+        result = extract_youtube_transcript(video_id, request.url)
+        updated_at = datetime.now(timezone.utc).isoformat()
+
+        if result.success and result.transcript:
+            metadata = VideoMetadata(
+                id=video_id,
+                url=request.url,
+                platform=platform,
+                title=result.title,
+                status=VideoProcessingStatus.COMPLETED,
+                created_at=now,
+                updated_at=updated_at,
+                error_message=None,
+                transcript=result.transcript,
+            )
+            return VideoProcessResponse(
+                status=VideoProcessingStatus.COMPLETED,
+                message=f"Transcript extracted successfully ({result.transcript.segment_count} segments, {len(result.transcript.full_text.split())} words).",
+                video=metadata,
+            )
+        else:
+            metadata = VideoMetadata(
+                id=video_id,
+                url=request.url,
+                platform=platform,
+                title=result.title,
+                status=VideoProcessingStatus.FAILED,
+                created_at=now,
+                updated_at=updated_at,
+                error_message=result.error_message,
+                transcript=None,
+            )
+            return VideoProcessResponse(
+                status=VideoProcessingStatus.FAILED,
+                message=result.error_message or "Transcript extraction failed.",
+                video=metadata,
+            )
+
+    # Fallback for direct stream or unknown web sources
     metadata = VideoMetadata(
         id=video_id,
         url=request.url,
         platform=platform,
-        title=None,  # Reserved for metadata/oEmbed title extraction in future milestone
+        title=None,
         status=VideoProcessingStatus.ACCEPTED,
         created_at=now,
         updated_at=now,
         error_message=None,
+        transcript=None,
     )
 
     return VideoProcessResponse(
         status=VideoProcessingStatus.ACCEPTED,
-        message="Video URL validated and registered. Metadata initialized in ACCEPTED state.",
+        message="Video URL validated and registered. Automated transcript extraction is currently enabled for YouTube.",
         video=metadata,
     )
+

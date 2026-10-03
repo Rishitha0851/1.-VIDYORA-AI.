@@ -36,6 +36,40 @@ class VideoProcessingStatus(str, Enum):
 # Pydantic Schemas / Data Models
 # ---------------------------------------------------------------------------
 
+class TranscriptSegment(BaseModel):
+    """
+    A single time-aligned caption snippet from the educational video.
+    
+    Fields:
+      - text: Spoken text content within this interval.
+      - start: Timestamp in seconds indicating when this segment begins.
+      - duration: Duration of this segment in seconds.
+    """
+    text: str
+    start: float
+    duration: float
+
+
+class VideoTranscript(BaseModel):
+    """
+    Structured transcript data representing the spoken educational content.
+    
+    Fields:
+      - video_id: Unique video identifier.
+      - language: Language code (e.g., 'en').
+      - is_generated: True if automatically generated (ASR), False if manual creator captions.
+      - full_text: Continuous aggregated spoken text.
+      - segments: Ordered list of time-aligned caption segments.
+      - segment_count: Total number of transcript segments.
+    """
+    video_id: str
+    language: str
+    is_generated: bool
+    full_text: str
+    segments: list[TranscriptSegment]
+    segment_count: int
+
+
 class VideoMetadata(BaseModel):
     """
     Structured metadata representing an educational video entity in VIDYORA AI.
@@ -44,11 +78,12 @@ class VideoMetadata(BaseModel):
       - id: Unique video identifier (e.g. YouTube 11-char ID or generated token).
       - url: The original normalized video URL.
       - platform: Detected platform (e.g., youtube, direct, unknown).
-      - title: Video title (optional until future metadata/oEmbed extraction).
+      - title: Video title (extracted via YouTube metadata or oEmbed).
       - status: Current lifecycle state.
       - created_at: UTC timestamp when the video was first submitted.
       - updated_at: UTC timestamp when metadata/status was last modified.
       - error_message: Descriptive explanation if status is FAILED.
+      - transcript: Structured time-aligned transcript if successfully extracted.
     """
     id: str
     url: str
@@ -58,6 +93,7 @@ class VideoMetadata(BaseModel):
     created_at: str
     updated_at: str
     error_message: Optional[str] = None
+    transcript: Optional[VideoTranscript] = None
 
 
 class VideoProcessRequest(BaseModel):
