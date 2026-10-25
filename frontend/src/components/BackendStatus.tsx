@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { API_BASE_URL } from '../services/authApi'
 
 /** Backend Health API Response Structure */
 interface HealthResponse {
@@ -16,7 +17,7 @@ interface BackendStatusProps {
 }
 
 export default function BackendStatus({
-  endpoint = 'http://127.0.0.1:8000/health',
+  endpoint = `${API_BASE_URL}/health`,
 }: BackendStatusProps) {
   // 1. React State hooks for tracking connection status, data, and errors
   const [status, setStatus] = useState<ConnectionStatus>('loading')
