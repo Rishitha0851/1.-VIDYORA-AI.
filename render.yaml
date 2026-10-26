@@ -5,6 +5,7 @@ services:
   - type: web
     name: vidyora-ai-backend
     runtime: python
+    plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT
@@ -32,7 +33,9 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       - key: FRONTEND_URL
-        sync: false
+        value: https://1-vidyora-ai-yenm.vercel.app
+      - key: ALLOWED_ORIGINS
+        value: https://1-vidyora-ai-yenm.vercel.app
 
   # ---------------------------------------------------------------------------
   # 2. Vite + React Frontend Static Site
@@ -49,4 +52,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        sync: false
+        value: https://vidyora-ai-backend.onrender.com
