@@ -191,17 +191,25 @@ export const LearningLibrary: React.FC<LearningLibraryProps> = ({
 
                       {/* Content Badges */}
                       <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono">
-                        <span>📝 {vid.chunk_count} chunks</span>
-                        <span>💬 {vid.segment_count} segments</span>
-                        {vid.has_quiz && (
-                          <span className="text-emerald-400 font-sans font-medium">
-                            ✓ Quiz ready
+                        {vid.status === 'failed' ? (
+                          <span className="text-rose-400 font-sans text-[11px]">
+                            Transcript unavailable for this video
                           </span>
-                        )}
-                        {vid.has_flashcards && (
-                          <span className="text-indigo-400 font-sans font-medium">
-                            ✓ Cards ready
-                          </span>
+                        ) : (
+                          <>
+                            <span>📝 {vid.chunk_count} chunks</span>
+                            <span>💬 {vid.segment_count} segments</span>
+                            {vid.has_quiz && (
+                              <span className="text-emerald-400 font-sans font-medium">
+                                ✓ Quiz ready
+                              </span>
+                            )}
+                            {vid.has_flashcards && (
+                              <span className="text-indigo-400 font-sans font-medium">
+                                ✓ Cards ready
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -210,14 +218,18 @@ export const LearningLibrary: React.FC<LearningLibraryProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectVideo(vid.video_id)}
-                        disabled={isLoadingWorkspace}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/20'
+                        disabled={isLoadingWorkspace || vid.status === 'failed'}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                          vid.status === 'failed'
+                            ? 'bg-rose-950/30 border border-rose-800/50 text-rose-300/80 cursor-not-allowed'
+                            : isSelected
+                              ? 'bg-emerald-600 text-white font-semibold shadow-sm cursor-pointer'
+                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/20 cursor-pointer'
                         }`}
                       >
-                        {isLoadingWorkspace && isSelected ? (
+                        {vid.status === 'failed' ? (
+                          <span>Unavailable</span>
+                        ) : isLoadingWorkspace && isSelected ? (
                           <>
                             <span className="animate-spin text-xs">⌛</span>
                             <span>Restoring...</span>

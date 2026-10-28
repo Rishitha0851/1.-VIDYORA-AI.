@@ -61,17 +61,11 @@ export default function AuthModal({
     setIsLoading(true)
     try {
       if (mode === 'register') {
-        await registerApi({
+        const tokenRes = await registerApi({
           email: email.trim().toLowerCase(),
           password,
           full_name: fullName.trim() || undefined,
           username: username.trim() || undefined,
-        })
-
-        // Auto-login after successful registration
-        const tokenRes = await loginApi({
-          email: email.trim().toLowerCase(),
-          password,
         })
         resetForm()
         onSuccess(tokenRes.user)

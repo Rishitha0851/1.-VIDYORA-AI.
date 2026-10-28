@@ -238,7 +238,13 @@ export default function App() {
       const result = await processVideoApi<VideoProcessResponse>(url)
       setProcessedVideo(result)
 
-      if (result.video?.id) {
+      if (result.status === 'failed') {
+        const failureMessage =
+          result.video?.error_message ||
+          result.message ||
+          'Video processing failed. Transcripts could not be retrieved for this video.'
+        setSubmissionError(failureMessage)
+      } else if (result.video?.id) {
         handleLoadKnowledgeGaps(result.video.id)
       }
     } catch (error) {
@@ -272,6 +278,14 @@ export default function App() {
 
     try {
       const workspace = await fetchVideoWorkspaceApi(videoId)
+
+      if (workspace.video.status === 'failed') {
+        setSubmissionError(
+          workspace.video.error_message ||
+            'This video failed processing because no transcript or captions were available.'
+        )
+        return
+      }
 
       const restoredResponse: VideoProcessResponse = {
         status: workspace.video.status,

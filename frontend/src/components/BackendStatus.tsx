@@ -42,45 +42,30 @@ export default function BackendStatus({
     } catch (error) {
       if (signal?.aborted) return
       setStatus('error')
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Backend is unavailable. Make sure FastAPI server is running on port 8000.'
-      )
+      let message = 'Backend is unavailable.'
+      if (error instanceof Error) {
+        if (error.message.toLowerCase().includes('fetch')) {
+          message = 'Backend is waking up or unreachable (Render free instances take ~50s to cold start).'
+        } else {
+          message = error.message
+        }
+      }
+      setErrorMessage(message)
     }
   }, [endpoint])
 
   // 3. useEffect hook to trigger health check on initial mount or when endpoint changes
   useEffect(() => {
     const controller = new AbortController()
-    
-    // Perform fetch when component mounts or endpoint updates
-    const fetchData = async () => {
-      try {
-        const response = await fetch(endpoint, { signal: controller.signal })
-        if (!response.ok) {
-          throw new Error(`Server responded with HTTP status ${response.status} (${response.statusText})`)
-        }
-        const result: HealthResponse = await response.json()
-        setData(result)
-        setStatus('success')
-      } catch (error) {
-        if (controller.signal.aborted) return
-        setStatus('error')
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Backend is unavailable. Make sure FastAPI server is running on port 8000.'
-        )
-      }
-    }
-
-    fetchData()
+    const timer = setTimeout(() => {
+      checkConnection(controller.signal)
+    }, 0)
 
     return () => {
+      clearTimeout(timer)
       controller.abort()
     }
-  }, [endpoint])
+  }, [checkConnection])
 
   return (
     <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center justify-between gap-4">

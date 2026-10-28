@@ -12,7 +12,13 @@ import type {
   UserRegisterRequest,
 } from '../types/auth'
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') || 'http://127.0.0.1:8000'
+const defaultUrl = import.meta.env.PROD
+  ? 'https://vidyora-ai-backend.onrender.com'
+  : 'http://127.0.0.1:8000'
+
+const rawEnvUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/+$/, '')
+
+export const API_BASE_URL = rawEnvUrl || defaultUrl
 const BASE_URL = API_BASE_URL
 const AUTH_TOKEN_KEY = 'vidyora_auth_token'
 
@@ -80,13 +86,17 @@ async function handleAuthResponse<T>(response: Response): Promise<T> {
 /**
  * Registers a new learner account.
  */
-export async function registerApi(payload: UserRegisterRequest): Promise<User> {
+export async function registerApi(payload: UserRegisterRequest): Promise<TokenResponse> {
   const response = await fetch(`${BASE_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  return handleAuthResponse<User>(response)
+  const tokenData = await handleAuthResponse<TokenResponse>(response)
+  if (tokenData.access_token) {
+    setAuthToken(tokenData.access_token)
+  }
+  return tokenData
 }
 
 /**
